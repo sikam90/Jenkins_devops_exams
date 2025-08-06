@@ -5,14 +5,14 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building...'
-                // tes étapes de build ici
+                // Ajoute ici tes commandes de build (docker build, etc)
             }
         }
 
         stage('Test') {
             steps {
                 echo 'Testing...'
-                // tes étapes de test ici
+                // Ajoute ici tes commandes de test (unit tests, lint, etc)
             }
         }
 
@@ -29,9 +29,9 @@ pipeline {
             }
             steps {
                 input message: 'Déployer en production ?'
+                echo 'Deploying to production environment...'
                 sh 'kubectl apply -f k8s/prod/deployment.yaml -n prod'
             }
         }
     }
 }
-
