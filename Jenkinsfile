@@ -1,20 +1,35 @@
 pipeline {
     agent any
 
-    environment {
-        KUBECONFIG = '/var/lib/jenkins/kubeconfig'
-    }
-
     stages {
-        stage('Checkout') {
+        stage('Build') {
             steps {
-                checkout scm
+                echo 'Building...'
+                // tes étapes de build ici
             }
         }
 
-        stage('Test kubectl') {
+        stage('Test') {
             steps {
-                sh 'kubectl get pods -n dev'
+                echo 'Testing...'
+                // tes étapes de test ici
+            }
+        }
+
+        stage('Deploy to Dev') {
+            steps {
+                echo 'Deploying to dev environment...'
+                sh 'kubectl apply -f k8s/dev/deployment.yaml -n dev'
+            }
+        }
+
+        stage('Deploy to Prod') {
+            when {
+                branch 'master'
+            }
+            steps {
+                input message: 'Déployer en production ?'
+                sh 'kubectl apply -f k8s/prod/deployment.yaml -n prod'
             }
         }
     }
