@@ -1,11 +1,11 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: movie-deployment
+  name: movie-app
   labels:
     app: movie
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: movie
@@ -16,6 +16,19 @@ spec:
     spec:
       containers:
       - name: movie-container
-        image: sikam/jenkins-devops-exam:movie-service
+        image: sikam90/movie-app:latest
         ports:
-        - containerPort: 80
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: movie-service
+spec:
+  selector:
+    app: movie
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: ClusterIP
