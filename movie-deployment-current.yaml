@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"movie"},"name":"movie-deployment","namespace":"dev"},"spec":{"replicas":2,"selector":{"matchLabels":{"app":"movie"}},"template":{"metadata":{"labels":{"app":"movie"}},"spec":{"containers":[{"image":"sikam/jenkins-devops-exam:movie-service","name":"movie-container","ports":[{"containerPort":80}]}]}}}}
+  creationTimestamp: "2025-08-11T10:05:57Z"
+  generation: 1
+  labels:
+    app: movie
+  name: movie-deployment
+  namespace: dev
+  resourceVersion: "57139"
+  uid: 79312cd9-5116-4963-863d-bd4a6a73bc95
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: movie
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: movie
+    spec:
+      containers:
+      - image: sikam/jenkins-devops-exam:movie-service
+        imagePullPolicy: IfNotPresent
+        name: movie-container
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 2
+  conditions:
+  - lastTransitionTime: "2025-08-11T10:05:59Z"
+    lastUpdateTime: "2025-08-11T10:05:59Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2025-08-11T10:05:57Z"
+    lastUpdateTime: "2025-08-11T10:05:59Z"
+    message: ReplicaSet "movie-deployment-78f5fcbf56" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 1
+  readyReplicas: 2
+  replicas: 2
+  updatedReplicas: 2

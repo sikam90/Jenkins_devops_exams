@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cast-deployment
+  namespace: dev
+  labels:
+    app: cast-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cast-service
+  template:
+    metadata:
+      labels:
+        app: cast-service
+    spec:
+      containers:
+      - name: cast-service
+        image: sikam/jenkins-devops-exam:cast-service
+        ports:
+        - containerPort: 80
+

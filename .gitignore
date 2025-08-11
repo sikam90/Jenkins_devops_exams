@@ -1,4 +1,38 @@
-env
-__pycache__
-.vscode
-.idea
+# Environnements virtuels
+env/
+venv/
+ENV/
+.venv/
+
+# Fichiers compilés Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configurations des éditeurs
+.vscode/
+.idea/
+
+# Fichiers de logs
+*.log
+
+# Fichiers de base de données SQLite
+*.sqlite3
+
+# Dossiers de cache
+.cache/
+.pytest_cache/
+
+# Fichiers de distributions Python
+dist/
+build/
+*.egg-info/
+
+# JetBrains IDEs
+*.iml
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
