@@ -1,25 +1,38 @@
 pipeline {
     agent any
+
     stages {
-        stage('Checkout') {
-            steps {
-                git url: 'https://ton-repo-git.git', branch: 'main'
-            }
-        }
         stage('Build') {
             steps {
-                sh './build.sh'
+                echo 'Building...'
+                // ici commandes de build
             }
         }
+
         stage('Test') {
             steps {
-                sh './run-tests.sh'
+                echo 'Testing...'
+                // ici commandes de test
             }
         }
-        stage('Deploy') {
+
+        stage('Deploy to Dev') {
             steps {
-                sh './deploy.sh'
+                echo 'Deploying to dev environment...'
+                sh 'kubectl apply -f k8s/dev/deployment.yaml -n dev'
+            }
+        }
+
+        stage('Deploy to Prod') {
+            when {
+                branch 'master'
+            }
+            steps {
+                input message: 'Déployer en production ?'
+                echo 'Deploying to production environment...'
+                sh 'kubectl apply -f k8s/prod/deployment.yaml -n prod'
             }
         }
     }
 }
+
