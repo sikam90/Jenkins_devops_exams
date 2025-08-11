@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        KUBECONFIG = '/home/ubuntu/.kube/config' // adapte selon ton installation
+        KUBECONFIG = '/var/lib/jenkins/.kube/config'  // chemin correct pour Jenkins
     }
     stages {
         stage('Checkout') {
