@@ -5,32 +5,19 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building...'
-                // Ajoute ici tes commandes de build (docker build, etc)
+                // Ajoute ici les commandes pour compiler ton projet
             }
         }
-
         stage('Test') {
             steps {
                 echo 'Testing...'
-                // Ajoute ici tes commandes de test (unit tests, lint, etc)
+                // Ajoute ici les commandes pour exécuter tes tests
             }
         }
-
-        stage('Deploy to Dev') {
+        stage('Deploy') {
             steps {
-                echo 'Deploying to dev environment...'
-                sh 'kubectl apply -f k8s/dev/deployment.yaml -n dev'
-            }
-        }
-
-        stage('Deploy to Prod') {
-            when {
-                branch 'master'
-            }
-            steps {
-                input message: 'Déployer en production ?'
-                echo 'Deploying to production environment...'
-                sh 'kubectl apply -f k8s/prod/deployment.yaml -n prod'
+                echo 'Deploying...'
+                // Ajoute ici les commandes pour déployer ton application
             }
         }
     }

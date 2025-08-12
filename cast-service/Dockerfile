@@ -1,14 +1,18 @@
-FROM python:3.8-slim
+# Utilise une image officielle Node.js légère
+FROM node:18-alpine
 
+# Définit le dossier de travail dans le container
 WORKDIR /app
 
-COPY ./requirements.txt /app/requirements.txt
+# Copie les fichiers de dépendances et installe les modules
+COPY package*.json ./
+RUN npm install
 
-RUN apt-get update \
-    && apt-get install gcc -y \
-    && apt-get clean
+# Copie tout le code source
+COPY . .
 
-RUN pip install -r /app/requirements.txt \
-    && rm -rf /root/.cache/pip
+# Expose le port 3000 (ajuste si nécessaire)
+EXPOSE 3000
 
-COPY . /app/
+# Commande pour démarrer l'application
+CMD ["npm", "start"]

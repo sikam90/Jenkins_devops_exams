@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+asyncpg
+databases
+SQLAlchemy
+starlette
+websockets
+httptools

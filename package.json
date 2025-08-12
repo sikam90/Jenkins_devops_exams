@@ -1,0 +1,20 @@
+{
+  "name": "Jenkins_devops_exams",
+  "version": "1.0.0",
+  "description": "Learn to build your own microservice using Python and FastAPI",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sikam90/Jenkins_devops_exams.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sikam90/Jenkins_devops_exams/issues"
+  },
+  "homepage": "https://github.com/sikam90/Jenkins_devops_exams#readme"
+}
