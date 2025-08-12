@@ -2,86 +2,153 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_REGISTRY = 'your-docker-registry'   // à remplacer par ton registry si besoin
-        IMAGE_NAME_CAST = 'cast-service'
-        IMAGE_NAME_MOVIE = 'movie-service'
-        IMAGE_NAME_NGINX = 'nginx'
-        K8S_NAMESPACE_QA = 'qa'
-        K8S_NAMESPACE_STAGING = 'staging'
-        K8S_NAMESPACE_PROD = 'prod'
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')
+        DOCKERHUB_USER = "ton_dockerhub_user"
+        IMAGE_PREFIX = "ton_dockerhub_user/app"
+        KUBECONFIG_CREDENTIALS = credentials('kubeconfig')
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'dev', url: 'https://github.com/sikam90/Jenkins_devops_exams.git'
             }
         }
 
-        stage('Build & Test Cast Service') {
-            steps {
-                dir('cast-service') {
-                    sh './test.sh unit'
-                    sh 'docker build -t $DOCKER_REGISTRY/$IMAGE_NAME_CAST:latest .'
+        stage('Unit Tests') {
+            parallel {
+                stage('Movie Service Tests') {
+                    steps {
+                        sh 'cd movie-service && pytest --maxfail=1 --disable-warnings -q'
+                    }
+                }
+                stage('Cast Service Tests') {
+                    steps {
+                        sh 'cd cast-service && pytest --maxfail=1 --disable-warnings -q'
+                    }
+                }
+                stage('Web Service Tests') {
+                    steps {
+                        sh 'cd web && npm install && npm run test'
+                    }
                 }
             }
         }
 
-        stage('Build & Test Movie Service') {
+        stage('Acceptance Tests') {
             steps {
-                dir('movie-service') {
-                    sh './test.sh unit'
-                    sh 'docker build -t $DOCKER_REGISTRY/$IMAGE_NAME_MOVIE:latest .'
+                sh './test.sh'
+            }
+        }
+
+        stage('Build & Push Docker Images') {
+            parallel {
+                stage('Movie Service') {
+                    steps {
+                        sh '''
+                        docker build -t $IMAGE_PREFIX-movie-service:latest ./movie-service
+                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
+                        docker push $IMAGE_PREFIX-movie-service:latest
+                        '''
+                    }
+                }
+                stage('Cast Service') {
+                    steps {
+                        sh '''
+                        docker build -t $IMAGE_PREFIX-cast-service:latest ./cast-service
+                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
+                        docker push $IMAGE_PREFIX-cast-service:latest
+                        '''
+                    }
+                }
+                stage('Web Service') {
+                    steps {
+                        sh '''
+                        docker build -t $IMAGE_PREFIX-web:latest ./web
+                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
+                        docker push $IMAGE_PREFIX-web:latest
+                        '''
+                    }
+                }
+                stage('NGINX') {
+                    steps {
+                        sh '''
+                        docker build -t $IMAGE_PREFIX-nginx:latest ./nginx
+                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
+                        docker push $IMAGE_PREFIX-nginx:latest
+                        '''
+                    }
                 }
             }
         }
 
-        stage('Build & Test Nginx') {
+        stage('Deploy to Dev') {
             steps {
-                dir('nginx') {
-                    sh './test.sh acceptance'
-                    sh 'docker build -t $DOCKER_REGISTRY/$IMAGE_NAME_NGINX:latest .'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                    export KUBECONFIG=$KUBECONFIG_FILE
+                    kubectl apply -f namespaces.yaml
+                    kubectl apply -f k8s/dev
+                    '''
                 }
-            }
-        }
-
-        stage('Push Docker Images') {
-            steps {
-                sh "docker push $DOCKER_REGISTRY/$IMAGE_NAME_CAST:latest"
-                sh "docker push $DOCKER_REGISTRY/$IMAGE_NAME_MOVIE:latest"
-                sh "docker push $DOCKER_REGISTRY/$IMAGE_NAME_NGINX:latest"
             }
         }
 
         stage('Deploy to QA') {
             steps {
-                sh './deploy-qa.sh'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                    export KUBECONFIG=$KUBECONFIG_FILE
+                    ./deploy-qa.sh
+                    '''
+                }
             }
         }
 
         stage('Deploy to Staging') {
             steps {
-                input message: 'Deploy to Staging?', ok: 'Yes'
-                sh './deploy-staging.sh'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                    export KUBECONFIG=$KUBECONFIG_FILE
+                    ./deploy-staging.sh
+                    '''
+                }
+            }
+        }
+
+        stage('Manual Approval for Production') {
+            when {
+                branch 'master'
+            }
+            steps {
+                input message: 'Deploy to Production?', ok: 'Deploy'
             }
         }
 
         stage('Deploy to Production') {
+            when {
+                branch 'master'
+            }
             steps {
-                input message: 'Deploy to Production?', ok: 'Yes'
-                sh './deploy-prod.sh'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                    export KUBECONFIG=$KUBECONFIG_FILE
+                    ./deploy-prod.sh
+                    '''
+                }
             }
         }
     }
 
     post {
         always {
-            echo 'Pipeline terminé.'
-        }
-        failure {
-            mail to: 'ton.email@domaine.com',
-                 subject: "Échec du pipeline Jenkins: ${currentBuild.fullDisplayName}",
-                 body: "Le build a échoué. Voir les logs : ${env.BUILD_URL}"
+            junit '**/test-results.xml'
+            cleanWs()
         }
     }
 }
