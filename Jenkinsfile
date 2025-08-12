@@ -2,12 +2,12 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'ENV', choices: ['dev', 'qa', 'prod'], description: 'Choisir l\'environnement de déploiement')
+        choice(name: 'ENV', choices: ['dev', 'qa', 'staging', 'prod'], description: 'Choisir l\'environnement de déploiement')
         string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Tag de l\'image Docker')
     }
 
     environment {
-        DOCKER_REGISTRY = 'monregistry.example.com'
+        DOCKER_REGISTRY = 'docker.io/toncompte'  // changer avec ton DockerHub
         HELM_RELEASE = "monapp-${params.ENV}"
         HELM_NAMESPACE = "${params.ENV}"
         CHART_DIR = 'charts/monapp'
@@ -55,6 +55,12 @@ pipeline {
         }
 
         stage('Deploy with Helm') {
+            when {
+                expression {
+                    // Déploiement automatique seulement si pas prod
+                    return params.ENV != 'prod' || (params.ENV == 'prod' && env.BRANCH_NAME == 'master')
+                }
+            }
             steps {
                 sh """
                    helm upgrade --install ${HELM_RELEASE} ${CHART_DIR} \
