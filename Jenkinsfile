@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = 'dockerhub-credentials-id'
-        DOCKER_IMAGE_PREFIX = 'sikam'  // Ton namespace Docker Hub
+        DOCKER_IMAGE_PREFIX = 'sikam'
     }
 
     stages {
@@ -104,3 +104,4 @@ pipeline {
         }
     }
 }
+
