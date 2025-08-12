@@ -1,33 +1,39 @@
-version: "3.8"
+version: '3.8'
+
+networks:
+  mynetwork:
+    driver: bridge
 
 services:
   cast-service:
-    build:
-      context: ./cast-service  # chemin vers le dossier où se trouve Dockerfile du cast-service
+    build: ./cast-service
+    image: sikam/cast-service:latest
+    container_name: cast-service
+    networks:
+      - mynetwork
     ports:
       - "8082:8080"
-    networks:
-      - mynetwork
+    restart: unless-stopped
 
   movie-service:
-    build:
-      context: ./movie-service  # chemin vers le dossier où se trouve Dockerfile du movie-service
-    ports:
-      - "8081:8080"
+    build: ./movie-service
+    image: sikam/movie-service:latest
+    container_name: movie-service
     networks:
       - mynetwork
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
 
   nginx:
-    build:
-      context: ./nginx  # chemin vers le Dockerfile NGINX que tu as créé
+    build: ./nginx
+    image: sikam/nginx:latest
+    container_name: nginx
+    networks:
+      - mynetwork
     depends_on:
       - cast-service
       - movie-service
     ports:
       - "80:80"
-    networks:
-      - mynetwork
-
-networks:
-  mynetwork:
-    driver: bridge
+    restart: unless-stopped

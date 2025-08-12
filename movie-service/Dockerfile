@@ -1,8 +1,6 @@
-FROM node:18-alpine
+FROM openjdk:17-jdk-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-EXPOSE 3000
-CMD ["npm", "start"]
+COPY target/movie-service.jar ./movie-service.jar
+EXPOSE 8080
+CMD ["java", "-jar", "movie-service.jar"]
 
