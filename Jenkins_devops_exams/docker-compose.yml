@@ -1,0 +1,39 @@
+version: '3.8'
+
+networks:
+  mynetwork:
+    driver: bridge
+
+services:
+  cast-service:
+    build: ./cast-service
+    image: sikam/cast-service:latest
+    container_name: cast-service
+    networks:
+      - mynetwork
+    ports:
+      - "8082:8080"
+    restart: unless-stopped
+
+  movie-service:
+    build: ./movie-service
+    image: sikam/movie-service:latest
+    container_name: movie-service
+    networks:
+      - mynetwork
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  nginx:
+    build: ./nginx
+    image: sikam/nginx:latest
+    container_name: nginx
+    networks:
+      - mynetwork
+    depends_on:
+      - cast-service
+      - movie-service
+    ports:
+      - "80:80"
+    restart: unless-stopped
