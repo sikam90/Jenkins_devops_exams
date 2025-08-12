@@ -1,23 +1,4 @@
-# Node modules
 node_modules/
-
-# Logs
 *.log
-
-# Environnements virtuels
-env/
-venv/
-ENV/
-.venv/
-
-# Environnement
 .env
-
-# Fichiers compilés Python
 __pycache__/
-*.py[cod]
-*$py.class
-
-# Configurations des éditeurs
-.vscode/
-.idea/
