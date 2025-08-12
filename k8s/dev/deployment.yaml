@@ -42,26 +42,3 @@ spec:
         image: your-docker-registry/movie-service:latest
         ports:
         - containerPort: 8081
-
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: sikam90
-  labels:
-    app: sikam90
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: sikam90
-  template:
-    metadata:
-      labels:
-        app: sikam90
-    spec:
-      containers:
-      - name: sikam90-container
-        image: your-docker-registry/sikam90:latest
-        ports:
-        - containerPort: 8082
