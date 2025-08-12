@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        KUBECONFIG = credentials('kubeconfig')
         DOCKER_REPO = "sikam"
         SERVICES = ["cast-service", "movie-service", "nginx"]
     }
@@ -18,7 +19,7 @@ pipeline {
             steps {
                 script {
                     SERVICES.each { service ->
-                        echo "Build Docker image for ${service}"
+                        echo "Building image for ${service}"
                         docker.build("${DOCKER_REPO}/${service}:latest", "./${service}")
                     }
                 }
@@ -30,10 +31,29 @@ pipeline {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
                         SERVICES.each { service ->
-                            echo "Push Docker image for ${service}"
+                            echo "Pushing image ${DOCKER_REPO}/${service}:latest"
                             docker.image("${DOCKER_REPO}/${service}:latest").push()
                         }
                     }
+                }
+            }
+        }
+
+        stage('Deploy to Qualification') {
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    echo "Deploying to qualification environment"
+                    sh 'kubectl apply -f k8s/qualification/'
+                }
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                input message: 'Valider le déploiement en production ?', ok: 'Déployer'
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    echo "Deploying to production environment"
+                    sh 'kubectl apply -f k8s/production/'
                 }
             }
         }
@@ -41,7 +61,7 @@ pipeline {
 
     post {
         always {
-            echo 'Nettoyage des ressources Docker temporaires...'
+            echo 'Cleaning up docker resources'
             sh 'docker system prune -f || true'
         }
     }
