@@ -2,67 +2,76 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        KUBECONFIG = credentials('kubeconfig')
-        DOCKER_REPO = "sikam"
-        SERVICES = ["cast-service", "movie-service", "nginx"]
+        APP_NAME = "Jenkins_devops_exams"
+        SERVICES = "cast-service,movie-service,nginx"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'dev', url: 'https://github.com/sikam90/Jenkins_devops_exams.git'
+                echo "Récupération du code source..."
+                checkout scm
             }
         }
 
-        stage('Build images') {
+        stage('Build Docker Image') {
             steps {
-                script {
-                    SERVICES.each { service ->
-                        echo "Building image for ${service}"
-                        docker.build("${DOCKER_REPO}/${service}:latest", "./${service}")
-                    }
-                }
+                echo "Construction de l'image Docker..."
+                sh 'docker build -t ${APP_NAME}:latest .'
             }
         }
 
-        stage('Push images') {
+        stage('Run Tests') {
             steps {
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        SERVICES.each { service ->
-                            echo "Pushing image ${DOCKER_REPO}/${service}:latest"
-                            docker.image("${DOCKER_REPO}/${service}:latest").push()
-                        }
-                    }
-                }
+                echo "Exécution des tests..."
+                sh 'chmod +x test.sh && ./test.sh'
             }
         }
 
-        stage('Deploy to Qualification') {
+        stage('Deploy to Dev') {
             steps {
-                withKubeConfig([credentialsId: 'kubeconfig']) {
-                    echo "Deploying to qualification environment"
-                    sh 'kubectl apply -f k8s/qualification/'
-                }
+                echo "Déploiement sur environnement DEV..."
+                sh 'chmod +x deploy-dev.sh && ./deploy-dev.sh'
+            }
+        }
+
+        stage('Deploy to QA') {
+            when {
+                branch 'qa'
+            }
+            steps {
+                echo "Déploiement sur environnement QA..."
+                sh 'chmod +x deploy-qa.sh && ./deploy-qa.sh'
+            }
+        }
+
+        stage('Deploy to Staging') {
+            when {
+                branch 'staging'
+            }
+            steps {
+                echo "Déploiement sur environnement STAGING..."
+                sh 'chmod +x deploy-staging.sh && ./deploy-staging.sh'
             }
         }
 
         stage('Deploy to Production') {
+            when {
+                branch 'master'
+            }
             steps {
-                input message: 'Valider le déploiement en production ?', ok: 'Déployer'
-                withKubeConfig([credentialsId: 'kubeconfig']) {
-                    echo "Deploying to production environment"
-                    sh 'kubectl apply -f k8s/production/'
-                }
+                echo "Déploiement sur environnement PROD..."
+                sh 'chmod +x deploy-prod.sh && ./deploy-prod.sh'
             }
         }
     }
 
     post {
-        always {
-            echo 'Cleaning up docker resources'
-            sh 'docker system prune -f || true'
+        success {
+            echo "Pipeline terminé avec succès ✅"
+        }
+        failure {
+            echo "Échec du pipeline ❌"
         }
     }
 }
