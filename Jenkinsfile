@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        // Utilise le bon credential ID ici
         DOCKERHUB_CREDENTIALS = 'dockerhub-credentials-id'
+        DOCKER_IMAGE_PREFIX = 'sikam'  // Ton namespace Docker Hub
     }
 
     stages {
@@ -17,29 +17,28 @@ pipeline {
         stage('Run Unit Tests - Cast Service') {
             steps {
                 echo 'Exécution des tests unitaires pour Cast Service'
-                // Place ici tes commandes de tests unitaires pour Cast Service
-                sh './run_tests_cast.sh'  // Exemple de commande, adapte à ton projet
+                sh './run_tests_cast.sh'
             }
         }
 
         stage('Run Acceptance Tests - Cast Service') {
             steps {
                 echo 'Exécution des tests d\'acceptation pour Cast Service'
-                sh './run_acceptance_tests_cast.sh' // Exemple
+                sh './run_acceptance_tests_cast.sh'
             }
         }
 
         stage('Run Unit Tests - Movie Service') {
             steps {
                 echo 'Exécution des tests unitaires pour Movie Service'
-                sh './run_tests_movie.sh' // Exemple
+                sh './run_tests_movie.sh'
             }
         }
 
         stage('Run Acceptance Tests - Movie Service') {
             steps {
                 echo 'Exécution des tests d\'acceptation pour Movie Service'
-                sh './run_acceptance_tests_movie.sh' // Exemple
+                sh './run_acceptance_tests_movie.sh'
             }
         }
 
@@ -47,9 +46,9 @@ pipeline {
             steps {
                 echo 'Construction des images Docker'
                 script {
-                    docker.withRegistry('', DOCKERHUB_CREDENTIALS) {
-                        sh 'docker build -t sikam90/cast-service:latest ./cast-service'
-                        sh 'docker build -t sikam90/movie-service:latest ./movie-service'
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKERHUB_CREDENTIALS) {
+                        sh "docker build -t ${DOCKER_IMAGE_PREFIX}/cast-service:latest ./cast-service"
+                        sh "docker build -t ${DOCKER_IMAGE_PREFIX}/movie-service:latest ./movie-service"
                     }
                 }
             }
@@ -59,9 +58,9 @@ pipeline {
             steps {
                 echo 'Push des images Docker sur Docker Hub'
                 script {
-                    docker.withRegistry('', DOCKERHUB_CREDENTIALS) {
-                        sh 'docker push sikam90/cast-service:latest'
-                        sh 'docker push sikam90/movie-service:latest'
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKERHUB_CREDENTIALS) {
+                        sh "docker push ${DOCKER_IMAGE_PREFIX}/cast-service:latest"
+                        sh "docker push ${DOCKER_IMAGE_PREFIX}/movie-service:latest"
                     }
                 }
             }
@@ -70,7 +69,6 @@ pipeline {
         stage('Deploy to Dev Environment') {
             steps {
                 echo 'Déploiement en environnement Dev'
-                // Ajoute ici ton script ou commandes pour déployer en Dev
                 sh './deploy_dev.sh'
             }
         }
