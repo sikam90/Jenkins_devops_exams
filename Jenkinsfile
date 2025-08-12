@@ -2,153 +2,117 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')
-        DOCKERHUB_USER = "ton_dockerhub_user"
-        IMAGE_PREFIX = "ton_dockerhub_user/app"
-        KUBECONFIG_CREDENTIALS = credentials('kubeconfig')
-    }
-
-    options {
-        disableConcurrentBuilds()
-        timestamps()
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        DOCKER_IMAGE = "ton_dockerhub_user/ton_app"
+        GITHUB_REPO = "https://github.com/ton_user/Jenkins_devops_exams.git"
+        K8S_NAMESPACE_DEV = "dev"
+        K8S_NAMESPACE_QA = "qa"
+        K8S_NAMESPACE_STAGING = "staging"
+        K8S_NAMESPACE_PROD = "prod"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'dev', url: 'https://github.com/sikam90/Jenkins_devops_exams.git'
+                git branch: 'dev', url: "${GITHUB_REPO}"
             }
         }
 
         stage('Unit Tests') {
-            parallel {
-                stage('Movie Service Tests') {
-                    steps {
-                        sh 'cd movie-service && pytest --maxfail=1 --disable-warnings -q'
-                    }
-                }
-                stage('Cast Service Tests') {
-                    steps {
-                        sh 'cd cast-service && pytest --maxfail=1 --disable-warnings -q'
-                    }
-                }
-                stage('Web Service Tests') {
-                    steps {
-                        sh 'cd web && npm install && npm run test'
-                    }
-                }
+            steps {
+                sh '''
+                echo "Running Unit Tests..."
+                chmod +x test.sh
+                ./test.sh --unit
+                '''
             }
         }
 
         stage('Acceptance Tests') {
             steps {
-                sh './test.sh'
+                sh '''
+                echo "Running Acceptance Tests..."
+                chmod +x test.sh
+                ./test.sh --acceptance
+                '''
             }
         }
 
-        stage('Build & Push Docker Images') {
-            parallel {
-                stage('Movie Service') {
-                    steps {
-                        sh '''
-                        docker build -t $IMAGE_PREFIX-movie-service:latest ./movie-service
-                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
-                        docker push $IMAGE_PREFIX-movie-service:latest
-                        '''
-                    }
-                }
-                stage('Cast Service') {
-                    steps {
-                        sh '''
-                        docker build -t $IMAGE_PREFIX-cast-service:latest ./cast-service
-                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
-                        docker push $IMAGE_PREFIX-cast-service:latest
-                        '''
-                    }
-                }
-                stage('Web Service') {
-                    steps {
-                        sh '''
-                        docker build -t $IMAGE_PREFIX-web:latest ./web
-                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
-                        docker push $IMAGE_PREFIX-web:latest
-                        '''
-                    }
-                }
-                stage('NGINX') {
-                    steps {
-                        sh '''
-                        docker build -t $IMAGE_PREFIX-nginx:latest ./nginx
-                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_USER --password-stdin
-                        docker push $IMAGE_PREFIX-nginx:latest
-                        '''
-                    }
-                }
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                echo "Building Docker Image..."
+                docker build -t $DOCKER_IMAGE:$BUILD_NUMBER .
+                '''
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                sh '''
+                echo "Pushing Docker Image to DockerHub..."
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                docker push $DOCKER_IMAGE:$BUILD_NUMBER
+                '''
             }
         }
 
         stage('Deploy to Dev') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-                    sh '''
-                    export KUBECONFIG=$KUBECONFIG_FILE
-                    kubectl apply -f namespaces.yaml
-                    kubectl apply -f k8s/dev
-                    '''
-                }
+                sh '''
+                echo "Deploying to Dev Environment..."
+                chmod +x deploy-dev.sh
+                ./deploy-dev.sh $DOCKER_IMAGE:$BUILD_NUMBER
+                '''
             }
         }
 
-        stage('Deploy to QA') {
+        stage('Deploy to QA (Qualification)') {
+            when { branch 'dev' }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-                    sh '''
-                    export KUBECONFIG=$KUBECONFIG_FILE
-                    ./deploy-qa.sh
-                    '''
-                }
+                sh '''
+                echo "Deploying to QA Environment..."
+                chmod +x deploy-qa.sh
+                ./deploy-qa.sh $DOCKER_IMAGE:$BUILD_NUMBER
+                '''
             }
         }
 
         stage('Deploy to Staging') {
+            when { branch 'dev' }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-                    sh '''
-                    export KUBECONFIG=$KUBECONFIG_FILE
-                    ./deploy-staging.sh
-                    '''
-                }
-            }
-        }
-
-        stage('Manual Approval for Production') {
-            when {
-                branch 'master'
-            }
-            steps {
-                input message: 'Deploy to Production?', ok: 'Deploy'
+                sh '''
+                echo "Deploying to Staging Environment..."
+                chmod +x deploy-staging.sh
+                ./deploy-staging.sh $DOCKER_IMAGE:$BUILD_NUMBER
+                '''
             }
         }
 
         stage('Deploy to Production') {
             when {
-                branch 'master'
+                allOf {
+                    branch 'master'
+                    expression { currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
+                }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-                    sh '''
-                    export KUBECONFIG=$KUBECONFIG_FILE
-                    ./deploy-prod.sh
-                    '''
-                }
+                input message: 'Confirm deployment to PRODUCTION?', ok: 'Deploy'
+                sh '''
+                echo "Deploying to Production Environment..."
+                chmod +x deploy-prod.sh
+                ./deploy-prod.sh $DOCKER_IMAGE:$BUILD_NUMBER
+                '''
             }
         }
     }
 
     post {
-        always {
-            junit '**/test-results.xml'
-            cleanWs()
+        success {
+            echo "Pipeline executed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check logs."
         }
     }
 }
