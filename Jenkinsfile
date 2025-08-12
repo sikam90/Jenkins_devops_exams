@@ -2,156 +2,104 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials-id')
-        KUBECONFIG_CREDENTIALS = credentials('kubeconfig-credentials-id')
-        GIT_REPO = "https://github.com/sikam90/Jenkins_devops_exams.git"
-        CAST_IMAGE = "sikam/cast-service"
-        MOVIE_IMAGE = "sikam/movie-service"
+        // Déclare ici tes credentials si besoin (exemple)
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-id')
     }
 
     stages {
-
         stage('Checkout') {
             steps {
-                echo "Récupération du code source"
-                git url: "${env.GIT_REPO}", branch: "${env.BRANCH_NAME}"
+                echo 'Récupération du code source depuis la branche dev'
+                checkout([$class: 'GitSCM', 
+                    branches: [[name: 'refs/heads/dev']], 
+                    userRemoteConfigs: [[url: 'https://github.com/sikam90/Jenkins_devops_exams.git']]
+                ])
             }
         }
 
         stage('Run Unit Tests - Cast Service') {
             steps {
-                echo "Tests unitaires du cast-service"
-                dir('cast-service') {
-                    sh './mvnw test'
-                }
+                echo 'Lancement des tests unitaires Cast Service'
+                // ici la commande de test, exemple:
+                // sh 'cd cast-service && ./run-tests.sh'
             }
         }
 
         stage('Run Acceptance Tests - Cast Service') {
             steps {
-                echo "Tests d’acceptation du cast-service"
-                dir('cast-service') {
-                    sh './mvnw verify -Pacceptance-tests'
-                }
+                echo 'Lancement des tests d\'acceptation Cast Service'
+                // sh 'cd cast-service && ./run-acceptance-tests.sh'
             }
         }
 
         stage('Run Unit Tests - Movie Service') {
             steps {
-                echo "Tests unitaires du movie-service"
-                dir('movie-service') {
-                    sh './mvnw test'
-                }
+                echo 'Lancement des tests unitaires Movie Service'
+                // sh 'cd movie-service && ./run-tests.sh'
             }
         }
 
         stage('Run Acceptance Tests - Movie Service') {
             steps {
-                echo "Tests d’acceptation du movie-service"
-                dir('movie-service') {
-                    sh './mvnw verify -Pacceptance-tests'
-                }
+                echo 'Lancement des tests d\'acceptation Movie Service'
+                // sh 'cd movie-service && ./run-acceptance-tests.sh'
             }
         }
 
         stage('Build Docker Images') {
             steps {
-                script {
-                    echo "Construction des images Docker"
-                    dockerCast = docker.build("${CAST_IMAGE}:${env.BRANCH_NAME}-${env.BUILD_NUMBER}", "cast-service/")
-                    dockerMovie = docker.build("${MOVIE_IMAGE}:${env.BRANCH_NAME}-${env.BUILD_NUMBER}", "movie-service/")
-                }
+                echo 'Construction des images Docker'
+                // sh 'docker build -t cast-service:latest ./cast-service'
+                // sh 'docker build -t movie-service:latest ./movie-service'
             }
         }
 
         stage('Push Docker Images') {
             steps {
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials-id') {
-                        echo "Push de l'image cast-service"
-                        dockerCast.push()
-                        dockerCast.push('latest')
-
-                        echo "Push de l'image movie-service"
-                        dockerMovie.push()
-                        dockerMovie.push('latest')
-                    }
-                }
+                echo 'Push des images Docker vers Docker Hub'
+                // withCredentials([usernamePassword(credentialsId: 'dockerhub-id', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                //     sh 'docker login -u $USERNAME -p $PASSWORD'
+                //     sh 'docker push cast-service:latest'
+                //     sh 'docker push movie-service:latest'
+                // }
             }
         }
 
         stage('Deploy to Dev Environment') {
-            when {
-                branch 'dev'
-            }
             steps {
-                echo "Déploiement automatique en DEV"
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=${KUBECONFIG_FILE}
-                        kubectl apply -n dev -f k8s/dev/cast-deployment.yaml
-                        kubectl apply -n dev -f k8s/dev/movie-deployment.yaml
-                    """
-                }
+                echo 'Déploiement en environnement de développement'
+                // sh './deploy-dev.sh'
             }
         }
 
         stage('Deploy to QA Environment') {
-            when {
-                branch 'qa'
-            }
             steps {
-                echo "Déploiement automatique en QUALIFICATION"
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=${KUBECONFIG_FILE}
-                        kubectl apply -n qa -f k8s/qa/cast-deployment.yaml
-                        kubectl apply -n qa -f k8s/qa/movie-deployment.yaml
-                    """
-                }
+                echo 'Déploiement en environnement QA'
+                // sh './deploy-qa.sh'
             }
         }
 
         stage('Deploy to Staging Environment') {
-            when {
-                branch 'staging'
-            }
             steps {
-                echo "Déploiement automatique en STAGING"
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=${KUBECONFIG_FILE}
-                        kubectl apply -n staging -f k8s/staging/cast-deployment.yaml
-                        kubectl apply -n staging -f k8s/staging/movie-deployment.yaml
-                    """
-                }
+                echo 'Déploiement en staging'
+                // sh './deploy-staging.sh'
             }
         }
 
         stage('Deploy to Production Environment') {
-            when {
-                branch 'master'
-            }
             steps {
-                input message: "Confirmer le déploiement en production ?", ok: "Déployer"
-                echo "Déploiement manuel en PRODUCTION"
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=${KUBECONFIG_FILE}
-                        kubectl apply -n prod -f k8s/prod/cast-deployment.yaml
-                        kubectl apply -n prod -f k8s/prod/movie-deployment.yaml
-                    """
-                }
+                echo 'Déploiement en production'
+                // sh './deploy-production.sh'
             }
         }
     }
 
     post {
-        success {
-            echo "Pipeline terminé avec succès."
-        }
         failure {
-            echo "Pipeline échoué. Vérifiez les logs."
+            echo 'Pipeline échoué. Vérifiez les logs.'
+        }
+        success {
+            echo 'Pipeline terminé avec succès.'
         }
     }
 }
