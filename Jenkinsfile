@@ -6,7 +6,7 @@ pipeline {
         GITHUB_CREDENTIALS = credentials('github-credentials')
         KUBECONFIG = credentials('kubeconfig')
         DOCKER_REPO = "sikam"
-        SERVICES = "cast-service,movie-service,nginx"  // <-- chaîne, pas liste
+        SERVICES = "cast-service,movie-service,nginx"  // chaîne CSV
     }
 
     stages {
