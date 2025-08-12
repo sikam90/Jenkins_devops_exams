@@ -6,7 +6,7 @@ pipeline {
         GITHUB_CREDENTIALS = credentials('github-credentials')
         KUBECONFIG = credentials('kubeconfig')
         DOCKER_REPO = "sikam"
-        SERVICES = ["cast-service", "movie-service", "nginx"]
+        SERVICES = "cast-service,movie-service,nginx"  // <-- chaîne, pas liste
     }
 
     stages {
@@ -19,7 +19,9 @@ pipeline {
         stage('Build images') {
             steps {
                 script {
-                    SERVICES.each { service ->
+                    def servicesList = env.SERVICES.split(',')
+                    servicesList.each { service ->
+                        echo "Build Docker image for ${service}"
                         docker.build("${DOCKER_REPO}/${service}:latest", "./${service}")
                     }
                 }
@@ -30,8 +32,10 @@ pipeline {
             steps {
                 echo 'Exécution des tests unitaires...'
                 script {
-                    sh './cast-service/run-unit-tests.sh'
-                    sh './movie-service/run-unit-tests.sh'
+                    def servicesList = env.SERVICES.split(',')
+                    servicesList.findAll { it != 'nginx' }.each { service ->
+                        sh "./${service}/run-unit-tests.sh"
+                    }
                 }
             }
         }
@@ -47,7 +51,9 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        SERVICES.each { service ->
+                        def servicesList = env.SERVICES.split(',')
+                        servicesList.each { service ->
+                            echo "Push Docker image for ${service}"
                             docker.image("${DOCKER_REPO}/${service}:latest").push()
                         }
                     }
@@ -87,8 +93,15 @@ pipeline {
 
     post {
         always {
-            echo 'Nettoyage des ressources temporaires...'
+            echo 'Nettoyage des ressources Docker temporaires...'
             sh 'docker system prune -f || true'
+        }
+        success {
+            echo 'Pipeline terminé avec succès !'
+        }
+        failure {
+            echo 'Pipeline échoué. Veuillez vérifier les logs.'
         }
     }
 }
+
