@@ -1,153 +1,92 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(name: 'ENV', choices: ['dev', 'qa', 'prod'], description: 'Choisir l’environnement de déploiement')
+    }
+
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        DOCKER_IMAGE_CAST = "ton_dockerhub_user/cast-service"
-        DOCKER_IMAGE_MOVIE = "ton_dockerhub_user/movie-service"
-        GITHUB_REPO = "https://github.com/ton_user/Jenkins_devops_exams.git"
-        K8S_NAMESPACE_DEV = "dev"
-        K8S_NAMESPACE_QA = "qa"
-        K8S_NAMESPACE_STAGING = "staging"
-        K8S_NAMESPACE_PROD = "prod"
+        DOCKER_REGISTRY = "docker.io/moncompte" // À modifier
+        IMAGE_TAG = "${params.ENV}-${env.BUILD_NUMBER}"
+        KUBECONFIG = credentials('kubeconfig-id') // ID Jenkins Credential
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'dev', url: "${GITHUB_REPO}"
+                checkout scm
             }
         }
 
-        stage('Unit Tests - Cast Service') {
-            steps {
-                dir('cast-service') {
-                    sh '''
-                    echo "Running Unit Tests for Cast Service..."
-                    chmod +x test.sh
-                    ./test.sh --unit
-                    '''
-                }
-            }
-        }
-
-        stage('Unit Tests - Movie Service') {
-            steps {
-                dir('movie-service') {
-                    sh '''
-                    echo "Running Unit Tests for Movie Service..."
-                    chmod +x test.sh
-                    ./test.sh --unit
-                    '''
-                }
-            }
-        }
-
-        stage('Acceptance Tests - Cast Service') {
-            steps {
-                dir('cast-service') {
-                    sh '''
-                    echo "Running Acceptance Tests for Cast Service..."
-                    chmod +x test.sh
-                    ./test.sh --acceptance
-                    '''
-                }
-            }
-        }
-
-        stage('Acceptance Tests - Movie Service') {
-            steps {
-                dir('movie-service') {
-                    sh '''
-                    echo "Running Acceptance Tests for Movie Service..."
-                    chmod +x test.sh
-                    ./test.sh --acceptance
-                    '''
-                }
-            }
-        }
-
-        stage('Build & Push Docker Images') {
+        stage('Build & Test Services') {
             parallel {
                 stage('Cast Service') {
                     steps {
-                        sh '''
-                        echo "Building Docker Image for Cast Service..."
-                        docker build -t $DOCKER_IMAGE_CAST:$BUILD_NUMBER cast-service
-                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                        docker push $DOCKER_IMAGE_CAST:$BUILD_NUMBER
-                        '''
+                        script {
+                            buildAndTestService('cast-service')
+                        }
                     }
                 }
                 stage('Movie Service') {
                     steps {
-                        sh '''
-                        echo "Building Docker Image for Movie Service..."
-                        docker build -t $DOCKER_IMAGE_MOVIE:$BUILD_NUMBER movie-service
-                        echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                        docker push $DOCKER_IMAGE_MOVIE:$BUILD_NUMBER
-                        '''
+                        script {
+                            buildAndTestService('movie-service')
+                        }
                     }
                 }
             }
         }
 
-        stage('Deploy to Dev') {
+        stage('Acceptance Tests') {
             steps {
-                sh '''
-                echo "Deploying to Dev Environment..."
-                chmod +x deploy-dev.sh
-                ./deploy-dev.sh $DOCKER_IMAGE_CAST:$BUILD_NUMBER $DOCKER_IMAGE_MOVIE:$BUILD_NUMBER
-                '''
-            }
-        }
-
-        stage('Deploy to QA') {
-            when { branch 'dev' }
-            steps {
-                sh '''
-                echo "Deploying to QA Environment..."
-                chmod +x deploy-qa.sh
-                ./deploy-qa.sh $DOCKER_IMAGE_CAST:$BUILD_NUMBER $DOCKER_IMAGE_MOVIE:$BUILD_NUMBER
-                '''
-            }
-        }
-
-        stage('Deploy to Staging') {
-            when { branch 'dev' }
-            steps {
-                sh '''
-                echo "Deploying to Staging Environment..."
-                chmod +x deploy-staging.sh
-                ./deploy-staging.sh $DOCKER_IMAGE_CAST:$BUILD_NUMBER $DOCKER_IMAGE_MOVIE:$BUILD_NUMBER
-                '''
-            }
-        }
-
-        stage('Deploy to Production') {
-            when {
-                allOf {
-                    branch 'master'
-                    expression { currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
+                dir('tests/acceptance') {
+                    sh 'chmod +x run-acceptance-tests.sh'
+                    sh './run-acceptance-tests.sh'
                 }
             }
+        }
+
+        stage('Push Docker Images') {
             steps {
-                input message: 'Confirm deployment to PRODUCTION?', ok: 'Deploy'
-                sh '''
-                echo "Deploying to Production Environment..."
-                chmod +x deploy-prod.sh
-                ./deploy-prod.sh $DOCKER_IMAGE_CAST:$BUILD_NUMBER $DOCKER_IMAGE_MOVIE:$BUILD_NUMBER
-                '''
+                withDockerRegistry([credentialsId: 'dockerhub-id', url: '']) {
+                    sh "docker push $DOCKER_REGISTRY/cast-service:${IMAGE_TAG}"
+                    sh "docker push $DOCKER_REGISTRY/movie-service:${IMAGE_TAG}"
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    if (params.ENV == 'dev') {
+                        sh './deploy-dev.sh'
+                    } else if (params.ENV == 'qa') {
+                        sh './deploy-qa.sh'
+                    } else if (params.ENV == 'prod') {
+                        sh './deploy-prod.sh'
+                    }
+                }
             }
         }
     }
 
     post {
+        always {
+            junit '**/target/surefire-reports/*.xml' // Si tests Maven
+        }
         success {
-            echo "Pipeline executed successfully!"
+            echo "✅ Déploiement ${params.ENV} terminé avec succès"
         }
         failure {
-            echo "Pipeline failed. Check logs."
+            echo "❌ Le pipeline a échoué"
         }
+    }
+}
+
+def buildAndTestService(serviceName) {
+    dir(serviceName) {
+        sh 'chmod +x run-unit-tests.sh'
+        sh './run-unit-tests.sh'
+        sh "docker build -t ${env.DOCKER_REGISTRY}/${serviceName}:${env.IMAGE_TAG} ."
     }
 }
