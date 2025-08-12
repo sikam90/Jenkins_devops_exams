@@ -2,100 +2,86 @@ pipeline {
     agent any
 
     environment {
-        // Noms en minuscules pour Docker
-        APP_NAME = "jenkins_devops_exams"
-        SERVICES = "cast-service,movie-service,nginx"
-    }
-
-    options {
-        timeout(time: 30, unit: 'MINUTES')
-        skipDefaultCheckout true
+        DOCKER_REGISTRY = 'your-docker-registry'   // à remplacer par ton registry si besoin
+        IMAGE_NAME_CAST = 'cast-service'
+        IMAGE_NAME_MOVIE = 'movie-service'
+        IMAGE_NAME_NGINX = 'nginx'
+        K8S_NAMESPACE_QA = 'qa'
+        K8S_NAMESPACE_STAGING = 'staging'
+        K8S_NAMESPACE_PROD = 'prod'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo "📥 Clonage du dépôt une seule fois..."
                 checkout scm
             }
         }
 
-        stage('Build Services in Parallel') {
+        stage('Build & Test Cast Service') {
             steps {
-                script {
-                    def serviceList = SERVICES.split(',')
-                    def buildStages = serviceList.collectEntries { service ->
-                        ["Build ${service}": {
-                            stage("Build ${service}") {
-                                echo "🔨 Construction de l'image Docker pour ${service}..."
-                                try {
-                                    // Supprimer ancienne image si existante (ignore erreur)
-                                    sh "docker image rm -f ${service.toLowerCase()}:latest || true"
-                                    // Build image Docker depuis le répertoire du service
-                                    sh "docker build -t ${service.toLowerCase()}:latest ./${service}"
-                                } catch (err) {
-                                    error("Erreur lors du build Docker pour ${service} : ${err}")
-                                }
-                            }
-                        }]
-                    }
-                    parallel buildStages
+                dir('cast-service') {
+                    sh './test.sh unit'
+                    sh 'docker build -t $DOCKER_REGISTRY/$IMAGE_NAME_CAST:latest .'
                 }
             }
         }
 
-        stage('Unit Tests') {
+        stage('Build & Test Movie Service') {
             steps {
-                echo "🧪 Exécution des tests unitaires..."
-                sh 'chmod +x test.sh && ./test.sh unit || exit 1'
+                dir('movie-service') {
+                    sh './test.sh unit'
+                    sh 'docker build -t $DOCKER_REGISTRY/$IMAGE_NAME_MOVIE:latest .'
+                }
             }
         }
 
-        stage('Acceptance Tests') {
+        stage('Build & Test Nginx') {
             steps {
-                echo "✅ Exécution des tests d’acceptance..."
-                sh 'chmod +x test.sh && ./test.sh acceptance || exit 1'
+                dir('nginx') {
+                    sh './test.sh acceptance'
+                    sh 'docker build -t $DOCKER_REGISTRY/$IMAGE_NAME_NGINX:latest .'
+                }
             }
         }
 
-        stage('Deploy to Environments') {
-            parallel {
-                stage('Deploy to QA') {
-                    when { branch 'qa' }
-                    steps {
-                        echo "🚀 Déploiement sur QA..."
-                        sh 'chmod +x deploy-qa.sh && ./deploy-qa.sh'
-                    }
-                }
-                stage('Deploy to Staging') {
-                    when { branch 'staging' }
-                    steps {
-                        echo "🚀 Déploiement sur STAGING..."
-                        sh 'chmod +x deploy-staging.sh && ./deploy-staging.sh'
-                    }
-                }
-                stage('Deploy to Production') {
-                    when { branch 'master' }
-                    steps {
-                        echo "🚀 Déploiement sur PROD..."
-                        sh 'chmod +x deploy-prod.sh && ./deploy-prod.sh'
-                    }
-                }
+        stage('Push Docker Images') {
+            steps {
+                sh "docker push $DOCKER_REGISTRY/$IMAGE_NAME_CAST:latest"
+                sh "docker push $DOCKER_REGISTRY/$IMAGE_NAME_MOVIE:latest"
+                sh "docker push $DOCKER_REGISTRY/$IMAGE_NAME_NGINX:latest"
+            }
+        }
+
+        stage('Deploy to QA') {
+            steps {
+                sh './deploy-qa.sh'
+            }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                input message: 'Deploy to Staging?', ok: 'Yes'
+                sh './deploy-staging.sh'
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                input message: 'Deploy to Production?', ok: 'Yes'
+                sh './deploy-prod.sh'
             }
         }
     }
 
     post {
-        success {
-            echo "✅ Pipeline terminé avec succès !"
+        always {
+            echo 'Pipeline terminé.'
         }
         failure {
-            echo "❌ Le pipeline a échoué."
-            // Ici tu peux ajouter notifications, emails, slack, etc.
-        }
-        always {
-            cleanWs()
+            mail to: 'ton.email@domaine.com',
+                 subject: "Échec du pipeline Jenkins: ${currentBuild.fullDisplayName}",
+                 body: "Le build a échoué. Voir les logs : ${env.BUILD_URL}"
         }
     }
 }
-
