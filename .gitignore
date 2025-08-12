@@ -1,4 +1,4 @@
-env
-__pycache__
-.vscode
-.idea
+node_modules/
+*.log
+.env
+__pycache__/
