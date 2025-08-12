@@ -2,13 +2,15 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'ENV', choices: ['dev', 'qa', 'prod'], description: 'Choisir l’environnement de déploiement')
+        choice(name: 'ENV', choices: ['dev', 'qa', 'prod'], description: 'Choisir l\'environnement de déploiement')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Tag de l\'image Docker')
     }
 
     environment {
-        DOCKER_REGISTRY = "docker.io/moncompte" // À modifier
-        IMAGE_TAG = "${params.ENV}-${env.BUILD_NUMBER}"
-        KUBECONFIG = credentials('kubeconfig-id') // ID Jenkins Credential
+        DOCKER_REGISTRY = 'monregistry.example.com'
+        HELM_RELEASE = "monapp-${params.ENV}"
+        HELM_NAMESPACE = "${params.ENV}"
+        CHART_DIR = 'charts/monapp'
     }
 
     stages {
@@ -18,75 +20,58 @@ pipeline {
             }
         }
 
-        stage('Build & Test Services') {
-            parallel {
-                stage('Cast Service') {
-                    steps {
-                        script {
-                            buildAndTestService('cast-service')
-                        }
-                    }
-                }
-                stage('Movie Service') {
-                    steps {
-                        script {
-                            buildAndTestService('movie-service')
-                        }
-                    }
+        stage('Build Docker Image') {
+            steps {
+                sh './build.sh'
+            }
+        }
+
+        stage('Run Unit Tests') {
+            steps {
+                sh './run-unit-tests.sh'
+            }
+            post {
+                always {
+                    junit 'tests/unit-results.xml'
                 }
             }
         }
 
-        stage('Acceptance Tests') {
+        stage('Run Acceptance Tests') {
             steps {
-                dir('tests/acceptance') {
-                    sh 'chmod +x run-acceptance-tests.sh'
-                    sh './run-acceptance-tests.sh'
+                sh './run-acceptance-tests.sh'
+            }
+            post {
+                always {
+                    junit 'tests/acceptance-results.xml'
                 }
             }
         }
 
-        stage('Push Docker Images') {
+        stage('Push Docker Image') {
             steps {
-                withDockerRegistry([credentialsId: 'dockerhub-id', url: '']) {
-                    sh "docker push $DOCKER_REGISTRY/cast-service:${IMAGE_TAG}"
-                    sh "docker push $DOCKER_REGISTRY/movie-service:${IMAGE_TAG}"
-                }
+                sh './push.sh'
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy with Helm') {
             steps {
-                script {
-                    if (params.ENV == 'dev') {
-                        sh './deploy-dev.sh'
-                    } else if (params.ENV == 'qa') {
-                        sh './deploy-qa.sh'
-                    } else if (params.ENV == 'prod') {
-                        sh './deploy-prod.sh'
-                    }
-                }
+                sh """
+                   helm upgrade --install ${HELM_RELEASE} ${CHART_DIR} \
+                   --namespace ${HELM_NAMESPACE} --create-namespace \
+                   --set image.tag=${params.IMAGE_TAG} \
+                   --values values-${params.ENV}.yaml
+                """
             }
         }
     }
 
     post {
-        always {
-            junit '**/target/surefire-reports/*.xml' // Si tests Maven
-        }
         success {
-            echo "✅ Déploiement ${params.ENV} terminé avec succès"
+            echo "✅ Pipeline terminé avec succès pour l'environnement ${params.ENV}"
         }
         failure {
             echo "❌ Le pipeline a échoué"
         }
-    }
-}
-
-def buildAndTestService(serviceName) {
-    dir(serviceName) {
-        sh 'chmod +x run-unit-tests.sh'
-        sh './run-unit-tests.sh'
-        sh "docker build -t ${env.DOCKER_REGISTRY}/${serviceName}:${env.IMAGE_TAG} ."
     }
 }
