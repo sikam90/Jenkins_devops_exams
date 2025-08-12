@@ -5,6 +5,8 @@ pipeline {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
         GITHUB_CREDENTIALS = credentials('github-credentials')
         KUBECONFIG = credentials('kubeconfig')
+        DOCKER_REPO = "sikam"
+        SERVICES = ["cast-service", "movie-service", "nginx"]
     }
 
     stages {
@@ -17,9 +19,9 @@ pipeline {
         stage('Build images') {
             steps {
                 script {
-                    docker.build("sikam/cast-service:latest", "./cast-service")
-                    docker.build("sikam/movie-service:latest", "./movie-service")
-                    docker.build("sikam/nginx:latest", "./nginx")
+                    SERVICES.each { service ->
+                        docker.build("${DOCKER_REPO}/${service}:latest", "./${service}")
+                    }
                 }
             }
         }
@@ -27,8 +29,10 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 echo 'Exécution des tests unitaires...'
-                sh './cast-service/run-unit-tests.sh'
-                sh './movie-service/run-unit-tests.sh'
+                script {
+                    sh './cast-service/run-unit-tests.sh'
+                    sh './movie-service/run-unit-tests.sh'
+                }
             }
         }
 
@@ -43,9 +47,9 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        docker.image("sikam/cast-service:latest").push()
-                        docker.image("sikam/movie-service:latest").push()
-                        docker.image("sikam/nginx:latest").push()
+                        SERVICES.each { service ->
+                            docker.image("${DOCKER_REPO}/${service}:latest").push()
+                        }
                     }
                 }
             }
@@ -78,6 +82,13 @@ pipeline {
                     sh 'kubectl apply -f k8s/production/'
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            echo 'Nettoyage des ressources temporaires...'
+            sh 'docker system prune -f || true'
         }
     }
 }
