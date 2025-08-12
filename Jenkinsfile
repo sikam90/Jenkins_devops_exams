@@ -8,9 +8,7 @@ pipeline {
     }
 
     options {
-        // Timeout global pour éviter pipeline bloqué
         timeout(time: 30, unit: 'MINUTES')
-        // Nettoyer workspace après build pour éviter conflits
         skipDefaultCheckout true
     }
 
@@ -31,7 +29,9 @@ pipeline {
                             stage("Build ${service}") {
                                 echo "🔨 Construction de l'image Docker pour ${service}..."
                                 try {
-                                    sh "docker image rm -f ${service}:latest || true"  // Nettoyer ancienne image si existe
+                                    // Supprimer ancienne image si existante (ignore erreur)
+                                    sh "docker image rm -f ${service.toLowerCase()}:latest || true"
+                                    // Build image Docker depuis le répertoire du service
                                     sh "docker build -t ${service.toLowerCase()}:latest ./${service}"
                                 } catch (err) {
                                     error("Erreur lors du build Docker pour ${service} : ${err}")
@@ -91,10 +91,11 @@ pipeline {
         }
         failure {
             echo "❌ Le pipeline a échoué."
-            // Optionnel: envoyer notification, email, slack...
+            // Ici tu peux ajouter notifications, emails, slack, etc.
         }
         always {
-            cleanWs()  // Nettoyer workspace pour éviter accumulation
+            cleanWs()
         }
     }
 }
+
