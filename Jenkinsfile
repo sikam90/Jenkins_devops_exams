@@ -8,74 +8,73 @@ pipeline {
             }
         }
 
-        stage('Run Unit Tests - Cast Service') {
+        stage('Build') {
             steps {
-                script {
-                    // Vérifie si le script existe avant de lancer
-                    if (fileExists('./run_tests_cast.sh')) {
-                        // catchError permet de continuer même si la commande échoue
-                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                            sh './run_tests_cast.sh'
+                echo 'Construction des images Docker...'
+                // Ici, tu mets les commandes de build docker, exemple : sh 'docker build -t myimage:latest .'
+            }
+        }
+
+        stage('Test') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        script {
+                            if (fileExists('./run_tests_cast.sh')) {
+                                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                                    sh './run_tests_cast.sh'
+                                }
+                            } else {
+                                echo "run_tests_cast.sh non trouvé."
+                            }
                         }
-                    } else {
-                        echo "run_tests_cast.sh non trouvé, on continue."
+                    }
+                }
+                stage('Acceptance Tests') {
+                    steps {
+                        echo 'Exécution des tests d’acceptation (placeholder).'
+                        // sh './run_acceptance_tests.sh' ou autre
                     }
                 }
             }
         }
 
-        stage('Run Acceptance Tests - Cast Service') {
+        stage('Push') {
             steps {
-                echo 'Tests d’acceptation Cast Service exécutés (placeholder).'
-                // Ajoutez ici les commandes réelles si besoin
+                echo 'Pousser les images Docker sur DockerHub...'
+                // sh 'docker push myimage:latest'
             }
         }
 
-        stage('Run Unit Tests - Movie Service') {
+        stage('Deploy Dev') {
             steps {
-                echo 'Tests unitaires Movie Service exécutés (placeholder).'
+                echo 'Déploiement automatique en Dev...'
+                // commande déploiement dev
             }
         }
 
-        stage('Run Acceptance Tests - Movie Service') {
+        stage('Deploy QA') {
             steps {
-                echo 'Tests d’acceptation Movie Service exécutés (placeholder).'
+                echo 'Déploiement automatique en QA...'
+                // commande déploiement qa
             }
         }
 
-        stage('Build Docker Images') {
+        stage('Deploy Staging') {
             steps {
-                echo 'Build Docker Images (placeholder).'
+                echo 'Déploiement automatique en Staging...'
+                // commande déploiement staging
             }
         }
 
-        stage('Push Docker Images') {
-            steps {
-                echo 'Push Docker Images (placeholder).'
+        stage('Deploy Production') {
+            when {
+                branch 'master'
             }
-        }
-
-        stage('Deploy to Dev Environment') {
             steps {
-                echo 'Déploiement en environnement Dev (placeholder).'
-            }
-        }
-
-        stage('Deploy to QA Environment') {
-            steps {
-                echo 'Déploiement en environnement QA (placeholder).'
-            }
-        }
-
-        stage('Deploy to Staging Environment') {
-            steps {
-                echo 'Déploiement en environnement Staging (placeholder).'
-            }
-        }
-
-        stage('Deploy to Production Environment') {
-            steps {
-                echo 'Déploiement en environnement Production (placeholder).'
+                input message: 'Déploiement en production ? Confirmes-tu ?', ok: 'Oui'
+                echo 'Déploiement manuel en production...'
+                // commande déploiement prod
             }
         }
     }
