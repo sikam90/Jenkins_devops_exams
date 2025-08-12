@@ -1,24 +1,94 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        GITHUB_CREDENTIALS = credentials('github-credentials')
+        KUBECONFIG = credentials('kubeconfig')
+        DOCKER_REPO = "sikam"
+        SERVICES = ["cast-service", "movie-service", "nginx"]
+    }
+
     stages {
-        stage('Build') {
+        stage('Checkout') {
             steps {
-                echo 'Building...'
-                // Ajoute ici les commandes pour compiler ton projet
+                git branch: 'dev', url: 'https://github.com/sikam90/Jenkins_devops_exams.git'
             }
         }
-        stage('Test') {
+
+        stage('Build images') {
             steps {
-                echo 'Testing...'
-                // Ajoute ici les commandes pour exécuter tes tests
+                script {
+                    SERVICES.each { service ->
+                        docker.build("${DOCKER_REPO}/${service}:latest", "./${service}")
+                    }
+                }
             }
         }
-        stage('Deploy') {
+
+        stage('Unit Tests') {
             steps {
-                echo 'Deploying...'
-                // Ajoute ici les commandes pour déployer ton application
+                echo 'Exécution des tests unitaires...'
+                script {
+                    sh './cast-service/run-unit-tests.sh'
+                    sh './movie-service/run-unit-tests.sh'
+                }
             }
+        }
+
+        stage('Acceptance Tests') {
+            steps {
+                echo 'Exécution des tests d’acceptation...'
+                sh './tests/acceptance/run-acceptance-tests.sh'
+            }
+        }
+
+        stage('Push images') {
+            steps {
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
+                        SERVICES.each { service ->
+                            docker.image("${DOCKER_REPO}/${service}:latest").push()
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Qualification Environment') {
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    echo "Déploiement dans l'environnement qualification"
+                    sh 'kubectl apply -f k8s/qualification/'
+                }
+            }
+        }
+
+        stage('Deploy to Testing Environment') {
+            steps {
+                input message: 'Valider le déploiement dans l’environnement testing ?', ok: 'Déployer'
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    echo "Déploiement dans l'environnement testing"
+                    sh 'kubectl apply -f k8s/testing/'
+                }
+            }
+        }
+
+        stage('Deploy to Production Environment') {
+            steps {
+                input message: 'Valider le déploiement en production ?', ok: 'Déployer'
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    echo "Déploiement dans l'environnement production"
+                    sh 'kubectl apply -f k8s/production/'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Nettoyage des ressources temporaires...'
+            sh 'docker system prune -f || true'
         }
     }
 }
